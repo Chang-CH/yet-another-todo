@@ -1,13 +1,14 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"yata-api/internal/repository"
+	"yata-api/internal/usecase"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 )
 
@@ -23,28 +24,16 @@ func main() {
 	dbPassword := os.Getenv("POSTGRES_PASSWORD")
 	dbName := os.Getenv("DB_NAME")
 
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		dbUser, dbPassword, dbHost, dbPort, dbName)
-
-	conn, err := pgx.Connect(context.Background(), dsn)
-	if err != nil {
-		log.Fatalf("Unable to connect to database: %v", err)
-	}
-	defer conn.Close(context.Background())
-
-	// Initialize the database table if it doesn't exist
-	_, err = conn.Exec(context.Background(), `CREATE TABLE IF NOT EXISTS users (
-		id SERIAL PRIMARY KEY,
-		name TEXT NOT NULL,
-		email TEXT UNIQUE NOT NULL
-	)`)
-	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
-	}
+	repo := repository.NewTaskRepository(dbUser, dbPassword, dbHost, dbPort, dbName)
+	defer repo.Close()
+	uc := usecase.NewTaskUseCase(repo)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "CRUD Go Server with pgx is running!")
 	})
+	//create router
+	router := mux.NewRouter()
+	router.HandleFunc("/users", uc.CreateTask).Methods("POST")
 
 	log.Println("Server running on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
